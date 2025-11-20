@@ -115,6 +115,11 @@ app.all("/*splat", (req, res, next) => {
   next(new ExpressError(404, "Page not found"));
 });
 
+app.use((req, res, next) => {
+  res.locals.currUser = req.user || null;
+  next();
+});
+
 app.use((err, req, res, next) => {
   let { statusCode = 505, message = "something went wrong" } = err;
   res.status(statusCode).render("error.ejs", { message });
