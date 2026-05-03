@@ -1,0 +1,363 @@
+<% layout("/layouts/boilerplate") %>
+<style>
+	.planner-container {
+		max-width: 900px;
+		margin: 2rem auto;
+	}
+	.planner-card {
+		border: none;
+		border-radius: 1.5rem;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+		overflow: hidden;
+		background: #fff;
+	}
+	.planner-header {
+		background: linear-gradient(135deg, #fe4d4d 0%, #ff8a8a 100%);
+		padding: 3rem 2rem;
+		color: white;
+		text-align: center;
+	}
+	.planner-header h1 {
+		font-weight: 700;
+		margin-bottom: 0.5rem;
+	}
+	.planner-body {
+		padding: 2.5rem;
+	}
+	.plan-btn {
+		background-color: #fe4d4d;
+		color: white;
+		border: none;
+		border-radius: 25px;
+		padding: 0.8rem 2rem;
+		font-weight: 600;
+		transition: transform 0.2s, background-color 0.2s;
+	}
+	.plan-btn:hover {
+		background-color: #e04444;
+		transform: translateY(-2px);
+		color: white;
+	}
+	.plan-btn:disabled {
+		background-color: #ffb8b8;
+	}
+	.itinerary-day {
+		border-left: 3px solid #fe4d4d;
+		margin-bottom: 2rem;
+		padding-left: 1.5rem;
+		position: relative;
+	}
+	.itinerary-day::before {
+		content: "";
+		position: absolute;
+		left: -9px;
+		top: 0;
+		width: 15px;
+		height: 15px;
+		border-radius: 50%;
+		background: #fe4d4d;
+	}
+	.suggested-stay {
+		background: #f8f9fa;
+		border-radius: 1rem;
+		padding: 1.5rem;
+		margin-top: 1rem;
+		border: 1px solid #eee;
+	}
+	.view-listing-link {
+		color: #fe4d4d;
+		text-decoration: none;
+		font-weight: 600;
+	}
+	.view-listing-link:hover {
+		text-decoration: underline;
+	}
+	#itinerary-map {
+		height: 400px;
+		width: 100%;
+		border-radius: 1rem;
+		margin-top: 1rem;
+		border: 1px solid var(--border);
+	}
+	.loading-shimmer {
+		background: linear-gradient(90deg, #f0f0f0 25%, #f8f8f8 50%, #f0f0f0 75%);
+		background-size: 200% 100%;
+		animation: shimmer 1.5s infinite;
+		border-radius: 0.5rem;
+		height: 20px;
+		margin-bottom: 10px;
+	}
+	@keyframes shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+</style>
+
+<div class="planner-container">
+	<div id="trip-planner-root"></div>
+</div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/axios@1.6.0/dist/axios.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+	const mapToken = "<%= process.env.MAP_TOKEN %>";
+	const { useState, useEffect } = React;
+
+	function TripPlanner() {
+		const [prompt, setPrompt] = useState("");
+		const [loading, setLoading] = useState(false);
+		const [error, setError] = useState("");
+		const [trip, setTrip] = useState(null);
+
+		const handleSubmit = async (e) => {
+			e.preventDefault();
+			setLoading(true);
+			setError("");
+			setTrip(null);
+
+			try {
+				const response = await axios.post("/api/itinerary/generate", {
+					prompt,
+				});
+				setTrip(response.data);
+				// Initialize map after state update
+				setTimeout(() => {
+					if (response.data.itinerary && response.data.itinerary.length > 0) {
+						initItineraryMap(response.data.itinerary);
+					}
+				}, 500);
+			} catch (err) {
+				const msg = err.response?.data?.message || err.response?.data?.error || "Failed to generate itinerary. Please try again.";
+				setError(msg);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		const handleDownloadPDF = () => {
+			const element = document.getElementById("itinerary-content");
+			const opt = {
+				margin: 1,
+				filename: `${trip.tripTitle || "My_Trip"}.pdf`,
+				image: { type: "jpeg", quality: 0.98 },
+				html2canvas: { scale: 2 },
+				jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+			};
+			html2pdf().set(opt).from(element).save();
+		};
+
+		return React.createElement(
+			"div",
+			null,
+			React.createElement(
+				"div",
+				{ className: "planner-card" },
+				React.createElement(
+					"div",
+					{ className: "planner-header" },
+					React.createElement("h1", null, "AI Trip Planner"),
+					React.createElement(
+						"p",
+						{ className: "mb-0" },
+						"Let AI craft your perfect WanderLust journey",
+					),
+				),
+				React.createElement(
+					"div",
+					{ className: "planner-body" },
+					React.createElement(
+						"form",
+						{ onSubmit: handleSubmit },
+						React.createElement(
+							"div",
+							{ className: "mb-4" },
+							React.createElement(
+								"label",
+								{ htmlFor: "prompt", className: "form-label fw-bold" },
+								"Where would you like to go?",
+							),
+							React.createElement("textarea", {
+								className: "form-control form-control-lg",
+								id: "prompt",
+								rows: "3",
+								value: prompt,
+								onChange: (e) => setPrompt(e.target.value),
+								placeholder:
+									"e.g., A 3-day spiritual trip to Varanasi and Rishikesh with local stays",
+								style: { borderRadius: "1rem" },
+								required: true,
+							}),
+						),
+						React.createElement(
+							"div",
+							{ className: "text-center" },
+							React.createElement(
+								"button",
+								{
+									type: "submit",
+									className: "plan-btn btn-lg",
+									disabled: loading,
+								},
+								loading
+									? React.createElement(
+											"span",
+											null,
+											React.createElement("span", {
+												className: "spinner-border spinner-border-sm me-2",
+												role: "status",
+											}),
+											"Crafting...",
+									  )
+									: "Generate Itinerary",
+							),
+						),
+					),
+					error &&
+						React.createElement(
+							"div",
+							{ className: "alert alert-danger mt-4", style: { borderRadius: "1rem" } },
+							error,
+						),
+					loading &&
+						React.createElement(
+							"div",
+							{ className: "mt-5" },
+							[1, 2, 3].map((i) =>
+								React.createElement(
+									"div",
+									{ key: i, className: "mb-4" },
+									React.createElement("div", { className: "loading-shimmer", style: { width: "40%" } }),
+									React.createElement("div", { className: "loading-shimmer", style: { width: "90%" } }),
+									React.createElement("div", { className: "loading-shimmer", style: { width: "70%" } }),
+								),
+							),
+						),
+					trip &&
+						React.createElement(
+							"div",
+							{ className: "mt-5", id: "itinerary-content" },
+							React.createElement(
+								"div",
+								{ className: "d-flex justify-content-between align-items-center mb-4" },
+								React.createElement("div", null, 
+									React.createElement("h2", { className: "h3 fw-bold mb-0" }, trip.tripTitle),
+									React.createElement(
+										"span",
+										{ className: "badge bg-light text-dark p-2" },
+										`${trip.totalDays} Days`,
+									),
+								),
+								React.createElement(
+									"button",
+									{ 
+										className: "btn btn-outline-danger btn-sm",
+										onClick: handleDownloadPDF
+									},
+									React.createElement("i", { className: "fa-solid fa-file-pdf me-1" }),
+									"Get PDF"
+								)
+							),
+							React.createElement("div", { id: "itinerary-map", className: "mb-4" }),
+							React.createElement(
+								"div",
+								{ className: "itinerary-list" },
+								trip.itinerary.map((day, index) =>
+									React.createElement(
+										"div",
+										{ key: index, className: "itinerary-day" },
+										React.createElement(
+											"h4",
+											{ className: "h5 fw-bold" },
+											`Day ${day.day}: ${day.city}`,
+										),
+										React.createElement("p", { className: "text-muted" }, day.description),
+										day.propertyId &&
+											React.createElement(
+												"div",
+												{ className: "suggested-stay" },
+												React.createElement(
+													"div",
+													{ className: "d-flex align-items-center" },
+													React.createElement("i", {
+														className: "fa-solid fa-hotel me-2 text-danger",
+													}),
+													React.createElement(
+														"span",
+														{ className: "fw-bold" },
+														"Recommended Stay",
+													),
+												),
+												React.createElement("p", { className: "mt-2 mb-1" }, day.propertyTitle),
+												React.createElement(
+													"a",
+													{
+														href: `/listings/${day.propertyId}`,
+														className: "view-listing-link",
+													},
+													"View Details →",
+												),
+											),
+									),
+								),
+							),
+						),
+				),
+			),
+		);
+	}
+
+	window.onload = () => {
+		const root = ReactDOM.createRoot(document.getElementById("trip-planner-root"));
+		root.render(React.createElement(TripPlanner));
+	};
+
+	function initItineraryMap(itinerary) {
+		mapboxgl.accessToken = mapToken;
+		const map = new mapboxgl.Map({
+			container: "itinerary-map",
+			style: "mapbox://styles/mapbox/streets-v12",
+			center: itinerary[0].geometry.coordinates,
+			zoom: 5,
+		});
+
+		const bounds = new mapboxgl.LngLatBounds();
+
+		itinerary.forEach((day, index) => {
+			if (day.geometry && day.geometry.coordinates) {
+				const el = document.createElement("div");
+				el.className = "marker";
+				el.style.backgroundColor = "#fe4d4d";
+				el.style.width = "20px";
+				el.style.height = "20px";
+				el.style.borderRadius = "50%";
+				el.style.border = "2px solid white";
+				el.style.display = "flex";
+				el.style.alignItems = "center";
+				el.style.justifyContent = "center";
+				el.style.color = "white";
+				el.style.fontSize = "10px";
+				el.style.fontWeight = "bold";
+				el.innerText = index + 1;
+
+				new mapboxgl.Marker(el)
+					.setLngLat(day.geometry.coordinates)
+					.setPopup(
+						new mapboxgl.Popup({ offset: 25 }).setHTML(
+							`<h6>Day ${day.day}: ${day.city}</h6><p>${day.propertyTitle}</p>`,
+						),
+					)
+					.addTo(map);
+
+				bounds.extend(day.geometry.coordinates);
+			}
+		});
+
+		if (!bounds.isEmpty()) {
+			map.fitBounds(bounds, { padding: 50 });
+		}
+	}
+</script>
+
