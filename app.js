@@ -1,5 +1,5 @@
 if (process.env.NODE_ENV != "production") {
-	require("dotenv").config();
+  require("dotenv").config();
 }
 const express = require("express");
 const app = express();
@@ -30,36 +30,36 @@ const userRouter = require("./routes/user.js");
 const itineraryRouter = require("./routes/itinerary.js");
 
 async function main() {
-	await mongoose.connect(dbUrl);
+  await mongoose.connect(dbUrl);
 }
 main()
-	.then(() => {
-		console.log("Connected to MongoDB");
-	})
-	.catch((err) => {
-		console.error("Failed to connect to MongoDB", err);
-	});
+  .then(() => {
+    console.log("Connected to MongoDB");
+  })
+  .catch((err) => {
+    console.error("Failed to connect to MongoDB", err);
+  });
 
 const store = MongoStore.create({
-	mongoUrl: dbUrl,
-	crypto: {
-		secret: "mysupersecretcode",
-	},
-	touchAfter: 24 * 3600,
+  mongoUrl: dbUrl,
+  crypto: {
+    secret: process.env.SECRET,
+  },
+  touchAfter: 24 * 3600,
 });
-store.on("error", () => {
-	console.log("Error in MONGO URL", err);
+store.on("error", (err) => {
+  console.error("MongoStore error:", err);
 });
 const sessionOptions = {
-	store,
-	secret: process.env.SECRET,
-	resave: false,
-	saveUninitialized: true,
-	cookie: {
-		httpOnly: true,
-		expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
-		maxAge: 1000 * 60 * 60 * 24 * 7,
-	},
+  store,
+  secret: process.env.SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+  },
 };
 
 app.use(session(sessionOptions));
@@ -71,10 +71,10 @@ passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
 app.use((req, res, next) => {
-	res.locals.success = req.flash("success");
-	res.locals.error = req.flash("error");
-	res.locals.currUser = req.user;
-	next();
+  res.locals.success = req.flash("success");
+  res.locals.error = req.flash("error");
+  res.locals.currUser = req.user;
+  next();
 });
 
 app.use("/listings", listingRouter);
@@ -83,16 +83,16 @@ app.use("/api/itinerary", itineraryRouter);
 
 app.use("/", userRouter);
 app.all("/*splat", (req, res, next) => {
-	next(new ExpressError(404, "Page Not Found"));
+  next(new ExpressError(404, "Page Not Found"));
 });
 app.use((err, req, res, next) => {
-	const { statusCode = 500, message = "Something went wrong!" } = err;
-	res.status(statusCode).render("listings/error.ejs", { message });
+  const { statusCode = 500, message = "Something went wrong!" } = err;
+  res.status(statusCode).render("listings/error.ejs", { message });
 });
 
 //listen for requests
 app.listen(8080, () => {
-	console.log(
-		"Server is running on port 8080 : http://localhost:8080/listings",
-	);
+  console.log(
+    "Server is running on port 8080 : http://localhost:8080/listings",
+  );
 });
